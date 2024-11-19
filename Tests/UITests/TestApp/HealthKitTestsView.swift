@@ -7,6 +7,7 @@
 //
 
 import SpeziHealthKit
+import SpeziHealthCharts
 import SpeziViews
 import SwiftUI
 
@@ -15,6 +16,9 @@ struct HealthKitTestsView: View {
     @Environment(HealthKit.self) var healthKitModule
     @Environment(HealthKitStore.self) var healthKitStore
 
+    @State private var showHealthChart = false
+    @State private var chartRange: ChartRange = .month
+    
     
     var body: some View {
         List {
@@ -39,6 +43,20 @@ struct HealthKitTestsView: View {
                     }
                 }
             }
+            Button("Show HealthChart") { showHealthChart.toggle() }
         }
+            .sheet(isPresented: $showHealthChart) {
+                HealthChart(HKQuantityType(.bodyMass), unit: .pound(), provider: FixedSamplesDataProvider.testProvider)
+                    .healthChartInteractions(disabled: .swipe)
+                    .padding()
+            }
     }
+}
+
+
+#Preview {
+    HealthKitTestsView()
+        .previewWith(standard: HealthKitTestAppStandard()) {
+            HealthKit()
+        }
 }

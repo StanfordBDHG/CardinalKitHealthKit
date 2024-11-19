@@ -1,4 +1,5 @@
 // swift-tools-version:5.9
+// TODO: Integrate Andreas' feedback to bump this up to 6.0
 
 //
 // This source file is part of the Stanford Spezi open-source project
@@ -26,7 +27,7 @@ let package = Package(
         .iOS(.v17)
     ],
     products: [
-        .library(name: "SpeziHealthKit", targets: ["SpeziHealthKit"])
+        .library(name: "SpeziHealthKit", targets: ["SpeziHealthKit", "SpeziHealthCharts"])
     ],
     dependencies: [
         .package(url: "https://github.com/StanfordSpezi/Spezi", from: "1.7.0")
@@ -34,6 +35,17 @@ let package = Package(
     targets: [
         .target(
             name: "SpeziHealthKit",
+            dependencies: [
+                .product(name: "Spezi", package: "Spezi")
+            ],
+            swiftSettings: [
+                swiftConcurrency,
+                .enableUpcomingFeature("InferSendableFromCaptures")
+            ],
+            plugins: [] + swiftLintPlugin()
+        ),
+        .target(
+            name: "SpeziHealthCharts",
             dependencies: [
                 .product(name: "Spezi", package: "Spezi")
             ],
