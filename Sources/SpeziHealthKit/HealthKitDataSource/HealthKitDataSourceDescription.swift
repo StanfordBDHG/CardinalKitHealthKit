@@ -21,5 +21,5 @@ public protocol HealthKitDataSourceDescription {
     /// - Parameters:
     ///   - healthStore: The `HKHealthStore` instance that the queries should be performed on.
     ///   - standard: The `Standard` instance that is used in the software system.
-    func dataSources(healthStore: HKHealthStore, standard: any HealthKitConstraint) -> [HealthKitDataSource]
+    func dataSources(healthStore: HKHealthStore, standard: any Standard) -> [HealthKitDataSource]
 }

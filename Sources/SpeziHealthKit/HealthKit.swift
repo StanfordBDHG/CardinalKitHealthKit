@@ -68,11 +68,26 @@ import SwiftUI
 /// ```
 @Observable
 public final class HealthKit: Module, EnvironmentAccessible, DefaultInitializable {
-    @ObservationIgnored @StandardActor private var standard: any HealthKitConstraint
+    @ObservationIgnored @StandardActor private var standard: any Standard
     private let healthStore: HKHealthStore
     @MainActor private var initialHealthKitDataSourceDescriptions: [HealthKitDataSourceDescription] = []
     @MainActor private var healthKitDataSourceDescriptions: [HealthKitDataSourceDescription] = []
     @ObservationIgnored private var healthKitComponents: [any HealthKitDataSource] = []
+    
+    public var progress: Progress {
+        var totalUnitCount: Int64 = 0
+        var completedUnitCount: Int64 = 0
+        for dataSource in healthKitComponents {
+            if let bulkDataSource = dataSource as? BulkUploadSampleDataSource {
+                let individualProgress = bulkDataSource.progress
+                totalUnitCount += individualProgress.totalUnitCount
+                completedUnitCount += individualProgress.completedUnitCount
+            }
+        }
+        let macroProgress = Progress(totalUnitCount: totalUnitCount)
+        macroProgress.completedUnitCount = completedUnitCount
+        return macroProgress
+    }
     
     
     @MainActor private var healthKitSampleTypes: Set<HKSampleType> {

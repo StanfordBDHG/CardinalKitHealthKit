@@ -14,25 +14,37 @@ class TestAppDelegate: SpeziAppDelegate {
     override var configuration: Configuration {
         Configuration(standard: HealthKitTestAppStandard()) {
             HealthKit {
-                CollectSample( //
+                CollectSample(
                     HKQuantityType.electrocardiogramType(),
                     deliverySetting: .background(.manual)
-                )
-                CollectSample( //
-                    HKQuantityType(.stepCount),
-                    deliverySetting: .background(.automatic)
                 )
                 CollectSample(
                     HKQuantityType(.pushCount),
                     deliverySetting: .anchorQuery(.manual)
                 )
                 CollectSample( //
-                    HKQuantityType(.activeEnergyBurned),
-                    deliverySetting: .anchorQuery(.automatic)
-                )
-                CollectSample( //
                     HKQuantityType(.restingHeartRate),
                     deliverySetting: .manual()
+                )
+                BulkUpload(
+                    Set([HKQuantityType(.stepCount)]),
+                    predicate: HKQuery.predicateForSamples(
+                        withStart: Calendar.current.date(byAdding: .month, value: -1, to: .now),
+                        end: Date(),
+                        options: .strictEndDate
+                    ),
+                    bulkSize: 100,
+                    deliveryStartSetting: .manual
+                )
+                BulkUpload(
+                    Set([HKQuantityType(.activeEnergyBurned)]),
+                    predicate: HKQuery.predicateForSamples(
+                        withStart: Calendar.current.date(byAdding: .month, value: -1, to: .now),
+                        end: Date(),
+                        options: .strictEndDate
+                    ),
+                    bulkSize: 2,
+                    deliveryStartSetting: .automatic
                 )
             }
         }

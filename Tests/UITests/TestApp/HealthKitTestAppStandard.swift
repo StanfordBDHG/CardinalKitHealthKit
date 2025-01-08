@@ -12,9 +12,12 @@ import SpeziHealthKit
 
 
 /// An example Standard used for the configuration.
-actor HealthKitTestAppStandard: Standard, HealthKitConstraint {
+actor HealthKitTestAppStandard: Standard, HealthKitConstraint, BulkUploadConstraint {
     @Dependency private var healthKitStore: HealthKitStore
     
+    func processBulk(samplesAdded: [HKSample], samplesDeleted: [HKDeletedObject]) async {
+        await healthKitStore.processBulk(samplesAdded: samplesAdded, samplesDeleted: samplesDeleted)
+    }
     
     func add(sample: HKSample) async {
         await healthKitStore.add(sample: sample)

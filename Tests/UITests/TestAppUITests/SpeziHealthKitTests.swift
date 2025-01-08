@@ -12,6 +12,48 @@ import XCTHealthKit
 
 
 final class HealthKitTests: XCTestCase {
+    func testBulkUpload() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--collectedSamplesOnly"]
+        app.deleteAndLaunch(withSpringboardAppName: "TestApp")
+
+//        try exitAppAndOpenHealth(.activeEnergy)
+//        try exitAppAndOpenHealth(.activeEnergy)
+//        try exitAppAndOpenHealth(.activeEnergy)
+//        try exitAppAndOpenHealth(.activeEnergy)
+//        try exitAppAndOpenHealth(.activeEnergy)
+//        
+        app.activate()
+        XCTAssert(app.buttons["Ask for authorization"].waitForExistence(timeout: 2))
+        app.buttons["Ask for authorization"].tap()
+        try app.handleHealthKitAuthorization()
+        app.hkTypeIdentifierAssert(
+            [
+                .activeEnergy: 5
+            ]
+        )
+        
+        XCTAssert(app.buttons["Inject Step Count Data"].waitForExistence(timeout: 2))
+        app.buttons["Inject Step Count Data"].tap()
+        
+        XCTAssert(app.buttons["Trigger data source collection"].waitForExistence(timeout: 2))
+        app.buttons["Trigger data source collection"].tap()
+        
+        // Define a predicate to match elements with the desired label
+        let predicate = NSPredicate(format: "label CONTAINS 'Collected Samples Since App Launch'")
+
+        // Locate the Section() element containing the text with the number of samples collected
+        let sectionElement = app.staticTexts.matching(predicate).element
+        XCTAssert(sectionElement.waitForExistence(timeout: 2))
+        
+        let labelText = sectionElement.label
+        // Parse the integer from the label text (starts with integer)
+        let samplesCount = Int(labelText.split(separator: " ").first ?? "")
+        
+        XCTAssertEqual(samplesCount, 505)
+    }
+    
+    
     func testHealthKit() throws { // swiftlint:disable:this function_body_length
         let app = XCUIApplication()
         app.launchArguments = ["--collectedSamplesOnly"]

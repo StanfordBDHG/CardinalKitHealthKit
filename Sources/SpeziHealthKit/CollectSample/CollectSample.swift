@@ -69,7 +69,7 @@ public struct CollectSample: HealthKitDataSourceDescription {
     
     public func dataSources(
         healthStore: HKHealthStore,
-        standard: any HealthKitConstraint
+        standard: any Standard
     ) -> [any HealthKitDataSource] {
         collectSamples.dataSources(healthStore: healthStore, standard: standard)
     }

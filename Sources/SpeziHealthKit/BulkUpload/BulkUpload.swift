@@ -5,18 +5,18 @@
 //
 // SPDX-License-Identifier: MIT
 //
+// Created by Matthew Joerke and Bryant Jimenez
 
-import Foundation
 import HealthKit
 import Spezi
+import OSLog
 
-
-/// Collects `HKSampleType`s  in the ``HealthKit`` module.
-public struct CollectSamples: HealthKitDataSourceDescription {
+/// Collects batches of `HKSampleType`s  in the ``HealthKit`` module for upload.
+public struct BulkUpload: HealthKitDataSourceDescription {
     public let sampleTypes: Set<HKSampleType>
-    let predicate: NSPredicate?
+    let predicate: NSPredicate
     let deliverySetting: HealthKitDeliverySetting
-    
+    let bulkSize: Int
     
     /// - Parameters:
     ///   - sampleTypes: The set of `HKSampleType`s that should be collected
@@ -26,19 +26,20 @@ public struct CollectSamples: HealthKitDataSourceDescription {
     ///   - deliverySetting: The ``HealthKitDeliverySetting`` that should be used to collect the sample type. `.manual` is the default argument used.
     public init(
         _ sampleTypes: Set<HKSampleType>,
-        predicate: NSPredicate? = nil,
-        deliverySetting: HealthKitDeliverySetting = .manual()
+        predicate: NSPredicate,
+        bulkSize: Int = 100,
+        deliveryStartSetting: HealthKitDeliveryStartSetting = .manual
     ) {
         self.sampleTypes = sampleTypes
         self.predicate = predicate
-        self.deliverySetting = deliverySetting
+        self.bulkSize = bulkSize
+        self.deliverySetting = HealthKitDeliverySetting.anchorQuery(deliveryStartSetting, saveAnchor: true)
+        Logger.healthKit.info("Initialized BulkUpload data source")
     }
-
-    public func dataSources(
-        healthStore: HKHealthStore,
-        standard: any Standard
-    ) -> [any HealthKitDataSource] {
-        guard let healthKitConstraint = standard as? any HealthKitConstraint else {
+    
+    public func dataSources(healthStore: HKHealthStore, standard: any Standard) -> [any HealthKitDataSource] {
+        // Ensure the 'standard' actually conforms to 'BulkUploadConstraint' to use specific processBulk function.
+        guard let bulkUploadConstraint = standard as? any BulkUploadConstraint else {
             preconditionFailure(
                 """
                 The `Standard` defined in the `Configuration` does not conform to \(String(describing: (any HealthKitConstraint).self)).
@@ -64,15 +65,14 @@ public struct CollectSamples: HealthKitDataSourceDescription {
         }
         
         return sampleTypes.map { sampleType in
-            HealthKitSampleDataSource(
+            BulkUploadSampleDataSource(
                 healthStore: healthStore,
-                standard: healthKitConstraint,
+                standard: bulkUploadConstraint,
                 sampleType: sampleType,
                 predicate: predicate,
-                deliverySetting: deliverySetting
+                deliverySetting: deliverySetting,
+                bulkSize: bulkSize
             )
         }
     }
 }
-
-extension CollectSamples: Hashable {}
