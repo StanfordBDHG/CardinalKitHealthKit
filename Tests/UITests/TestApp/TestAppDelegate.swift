@@ -31,7 +31,8 @@ class TestAppDelegate: SpeziAppDelegate {
                 CollectSample(
                     .activeEnergyBurned
                 )
-                CollectSample(.heartRate, start: .manual)
+                CollectSample(.heartRate, start: .automatic)
+                CollectSample(.heartRate, start: .automatic)
                 
                 RequestReadAccess(
                     quantity: [.bloodOxygen],

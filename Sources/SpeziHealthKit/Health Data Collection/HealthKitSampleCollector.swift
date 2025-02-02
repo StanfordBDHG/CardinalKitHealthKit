@@ -13,6 +13,11 @@ import SwiftUI
 
 
 final class HealthKitSampleCollector<Sample: _HKSampleWithSampleType>: HealthDataCollector {
+    private enum QueryVariant {
+        case anchorQuery(Task<Void, any Error>)
+        case backgroundDelivery(HKHealthStore.BackgroundObserverQueryInvalidator)
+    }
+    
     // This needs to be unowned since the HealthKit module will establish a strong reference to the data source.
     private unowned let healthKit: HealthKit
     private let standard: any HealthKitConstraint
@@ -21,6 +26,7 @@ final class HealthKitSampleCollector<Sample: _HKSampleWithSampleType>: HealthDat
     private let predicate: NSPredicate?
     let deliverySetting: HealthDataCollectorDeliverySetting
     @MainActor private(set) var isActive = false
+    private var queryVariant: QueryVariant?
     
     @MainActor private lazy var anchor: HKQueryAnchor? = loadAnchor() {
         didSet {
@@ -72,6 +78,7 @@ final class HealthKitSampleCollector<Sample: _HKSampleWithSampleType>: HealthDat
     }
     
 
+    @MainActor
     func startDataCollection() async {
         guard !isActive else {
             return
@@ -79,7 +86,11 @@ final class HealthKitSampleCollector<Sample: _HKSampleWithSampleType>: HealthDat
         do {
             if deliverySetting.continueInBackground {
                 // set up a background query
-                try await healthStore.startBackgroundDelivery(for: [sampleType.hkSampleType]) { result in
+                let queryInvalidator = try await healthStore.startBackgroundDelivery(for: [sampleType.hkSampleType]) { result in
+                    guard self.isActive else {
+                        // if the sample collector has been turned off, we don't want to process these.
+                        return
+                    }
                     guard case let .success((sampleTypes, completionHandler)) = result else {
                         return
                     }
@@ -98,6 +109,7 @@ final class HealthKitSampleCollector<Sample: _HKSampleWithSampleType>: HealthDat
                     completionHandler()
                 }
                 isActive = true
+                queryVariant = .backgroundDelivery(queryInvalidator)
             } else {
                 // set up a non-background query
                 healthKit.logger.notice("Starting anchor query")
@@ -106,6 +118,24 @@ final class HealthKitSampleCollector<Sample: _HKSampleWithSampleType>: HealthDat
             }
         } catch {
             healthKit.logger.error("Could not Process HealthKit data collection: \(error.localizedDescription)")
+        }
+    }
+    
+    
+    @MainActor
+    func stopDataCollection() async {
+        guard isActive else {
+            return
+        }
+        isActive = false
+        switch exchange(&queryVariant, with: nil) {
+        case nil:
+            break
+        case .anchorQuery(let task):
+            task.cancel()
+        case .backgroundDelivery(let invalidator):
+            invalidator.invalidate()
+            healthStore.disableBackgroundDelivery(for: [sampleType.hkSampleType])
         }
     }
 
@@ -130,8 +160,11 @@ final class HealthKitSampleCollector<Sample: _HKSampleWithSampleType>: HealthDat
             anchor: anchor
         )
         let updateQueue = anchorDescriptor.results(for: healthStore)
-        Task {
+        let task = Task {
             for try await results in updateQueue {
+                guard isActive else {
+                    return
+                }
                 for deletedObject in results.deletedObjects {
                     await standard.remove(sample: deletedObject)
                 }
@@ -141,6 +174,7 @@ final class HealthKitSampleCollector<Sample: _HKSampleWithSampleType>: HealthDat
                 self.anchor = results.newAnchor
             }
         }
+        queryVariant = .anchorQuery(task)
     }
 
     

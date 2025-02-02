@@ -40,6 +40,9 @@ public final class HealthKit: Module, EnvironmentAccessible, DefaultInitializabl
     /// Which HealthKit data we need to be able to access, for read and/or write operations.
     private var dataAccessRequirements: DataAccessRequirements
     
+    /// Whether the module has already been configured.
+    @ObservationIgnored private var didConfigure = false
+    
     /// Configurations which were supplied to the initializer, but have not yet been applied.
     /// - Note: This property is intended only to store the configuration until `configure()` has been called. It is not used afterwards.
     @ObservationIgnored private var pendingConfiguration: [any HealthKitConfigurationComponent]
@@ -84,6 +87,7 @@ public final class HealthKit: Module, EnvironmentAccessible, DefaultInitializabl
     @_documentation(visibility: internal)
     public func configure() {
         Task {
+            didConfigure = true
             for component in exchange(&pendingConfiguration, with: []) {
                 await component.configure(for: self, on: self.standard)
             }
@@ -227,14 +231,64 @@ extension HealthKit { // swiftlint:disable:this file_types_order
         }
     }
     
+    /// Adds a new ``CollectSample`` definition to the module.
+    ///
+    /// Calling this function is equivalent to including the ``CollectSample`` definition in the initial module configuration.
+    @MainActor
+    public func addHealthDataCollector(_ collectSample: CollectSample<some Any>) async {
+        if !didConfigure {
+            pendingConfiguration.append(collectSample)
+        } else {
+            await collectSample.configure(for: self, on: standard)
+        }
+    }
+    
     /// Adds a new data source for collecting health data in the background.
     ///
     /// If the user was already asked for access to this collector's sample type, the collector will immediately be informed to
     /// start its automatic data collection.
     @MainActor
-    public func addHealthDataCollector(_ collector: some HealthDataCollector) async {
-        registeredDataCollectors.append(collector)
-        await startAutomaticDataCollectionIfPossible(collector)
+    public func addHealthDataCollector(_ newCollector: any HealthDataCollector) async {
+        enum Action {
+            case add
+            case dontAdd
+            case replace(index: Int)
+        }
+        let action: Action = { () -> Action in
+            // Determine, based on the existing currently-registered collectors, how this one should be handled.
+            for (idx, existingCollector) in self.registeredDataCollectors.enumerated() {
+                guard existingCollector.typeErasedSampleType == newCollector.typeErasedSampleType else {
+                    continue
+                }
+                if existingCollector.deliverySetting == newCollector.deliverySetting {
+                    // the existing collector has the same sample type and delivery setting as the new one
+                    // -> there's no need to add the new one (we already have an identical one)
+                    return .dontAdd
+                } else if existingCollector.deliverySetting.continueInBackground && !newCollector.deliverySetting.continueInBackground {
+                    // we have an existing one which is supposed to run in the background, and a new one which is not.
+                    // -> the background-enabled one can subsume the new one
+                    return .dontAdd
+                } else if !existingCollector.deliverySetting.continueInBackground && newCollector.deliverySetting.continueInBackground {
+                    // the existing collector is supposed to only run while the app is active, while the new one should also
+                    // continue in the background. we replace the existing one with the new one, thereby effectively subsuming it into the new one
+                    return .replace(index: idx)
+                }
+            }
+            // if none of the existing collectors matched against the new one (or if there weren't any existing ones),
+            // we want to add the new one.
+            return .add
+        }()
+        switch action {
+        case .dontAdd:
+            return
+        case .replace(let index):
+            await registeredDataCollectors[index].stopDataCollection()
+            registeredDataCollectors.remove(at: index)
+            fallthrough
+        case .add:
+            registeredDataCollectors.append(newCollector)
+            await startAutomaticDataCollectionIfPossible(newCollector)
+        }
     }
     
     

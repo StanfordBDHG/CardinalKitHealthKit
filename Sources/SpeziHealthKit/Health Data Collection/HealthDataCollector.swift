@@ -40,4 +40,15 @@ public protocol HealthDataCollector: AnyObject {
     /// Called to inform the collector that it should start collecting data.
     @MainActor
     func startDataCollection() async
+    
+    /// Tells the data collector to stop its data collection.
+    @MainActor
+    func stopDataCollection() async
+}
+
+
+extension HealthDataCollector {
+    var typeErasedSampleType: any AnySampleType {
+        sampleType
+    }
 }

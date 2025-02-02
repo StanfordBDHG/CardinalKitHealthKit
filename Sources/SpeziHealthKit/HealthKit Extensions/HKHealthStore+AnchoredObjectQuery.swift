@@ -21,8 +21,8 @@ extension HKHealthStore {
     @MainActor
     func anchoredSingleObjectQuery(
         for sampleType: HKSampleType,
-        using anchor: HKQueryAnchor? = nil, // swiftlint:disable:this function_default_parameter_at_end
-        withPredicate predicate: NSPredicate? = nil, // swiftlint:disable:this function_default_parameter_at_end
+        using anchor: HKQueryAnchor?,
+        withPredicate predicate: NSPredicate?,
         standard: any HealthKitConstraint
     ) async throws -> HKQueryAnchor {
         let anchorDescriptor = anchorDescriptor(sampleType: sampleType, predicate: predicate, anchor: anchor)

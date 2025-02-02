@@ -12,17 +12,33 @@ import Spezi
 
 
 extension HKHealthStore {
+    final class BackgroundObserverQueryInvalidator: @unchecked Sendable {
+        private let healthStore: HKHealthStore
+        private weak var query: HKQuery?
+        
+        init(healthStore: HKHealthStore, query: HKQuery) {
+            self.healthStore = healthStore
+            self.query = query
+        }
+        
+        func invalidate() {
+            if let query {
+                healthStore.stop(query)
+            }
+        }
+    }
+    
     private static let activeObservationsLock = NSLock()
     private static nonisolated(unsafe) var activeObservations: [HKObjectType: Int] = [:]
     
-    @MainActor
+    @MainActor @discardableResult
     func startBackgroundDelivery(
         for sampleTypes: Set<HKSampleType>,
         withPredicate predicate: NSPredicate? = nil,
         updateHandler: @escaping @MainActor @Sendable (
             Result<(sampleTypes: Set<HKSampleType>, completionHandler: HKObserverQueryCompletionHandler), any Error>
         ) async -> Void
-    ) async throws {
+    ) async throws -> BackgroundObserverQueryInvalidator {
         let queryDescriptors: [HKQueryDescriptor] = sampleTypes.map {
             HKQueryDescriptor(sampleType: $0, predicate: predicate)
         }
@@ -57,10 +73,11 @@ extension HKHealthStore {
         }
         self.execute(observerQuery)
         try await enableBackgroundDelivery(for: sampleTypes)
+        return .init(healthStore: self, query: observerQuery)
     }
     
     
-    private func enableBackgroundDelivery(for objectTypes: Set<HKObjectType>) async throws {
+    func enableBackgroundDelivery(for objectTypes: Set<HKObjectType>) async throws {
         var enabledObjectTypes: Set<HKObjectType> = []
         do {
             for objectType in objectTypes {
@@ -78,7 +95,7 @@ extension HKHealthStore {
     }
     
     
-    private func disableBackgroundDelivery(
+    func disableBackgroundDelivery(
         for objectTypes: Set<HKObjectType>
     ) {
         Self.activeObservationsLock.withLock {
